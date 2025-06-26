@@ -1,3 +1,16 @@
+import bpy
+import math
+import os # Importa o módulo 'os' para operações de sistema de arquivos
+import glob # Importa o módulo 'glob' para encontrar arquivos que correspondem a um padrão
+import random # Adicionado para seleção aleatória, embora o loop seja sequencial agora
+import warnings
+import numpy as np
+from tqdm import tqdm
+from typing import List, Tuple, Optional # Adicionado Optional para os novos parâmetros
+import uuid
+
+# Assumindo que essas importações do seu projeto 'sdg_engine' estão corretamente configuradas
+# e os módulos são acessíveis no ambiente em que o Blender está rodando o script.
 from sdg_engine.core.interfaces.blender.scene import BlenderScene
 from sdg_engine.core.interfaces.blender.sweep import BlenderSweep
 from sdg_engine.core.interfaces.blender.object import BlenderElement
@@ -5,16 +18,6 @@ from sdg_engine.config import RenderingConfig # Certifique-se que RenderingConfi
 from sdg_engine.core.interfaces.blender import utils
 
 from sdg_engine.core.model import Dataset, Annotation, SnapshotAnnotation
-
-import bpy
-from tqdm import tqdm
-from typing import List, Tuple, Optional # Adicionado Optional para os novos parâmetros
-import uuid
-import warnings
-import numpy as np
-import os
-import glob
-import random # Adicionado para seleção aleatória, embora o loop seja sequencial agora
 
 METADATA_FILENAME = "metadata.jsonl"
 
@@ -67,7 +70,7 @@ class BlenderRenderer:
     def render_snapshot(
         self,
         snapshot_id: Optional[uuid.UUID] = None, # Torna opcional, para compatibilidade
-        custom_filepath: Optional[str] = None # NOVO: Caminho de arquivo completo customizado
+        custom_filepath: Optional[str] = None # Caminho de arquivo completo customizado
     ) -> str:
         """Render a snapshot of the scene and return the path to the snapshot."""
         if custom_filepath:
@@ -87,7 +90,7 @@ class BlenderRenderer:
         elements: List[BlenderElement],
         snapshot_id: uuid.UUID, # Mantém como UUID, representa o "snapshot" lógico base
         relative: bool = True,
-        file_name_override: Optional[str] = None # NOVO: Nome do arquivo final da imagem
+        file_name_override: Optional[str] = None # Nome do arquivo final da imagem
     ) -> Annotation:
         """Create bounding boxes for the elements in the scene."""
         if len(cameras) > 1:
@@ -153,7 +156,9 @@ def generate_dataset_from_config(config: RenderingConfig) -> Dataset:
     all_background_images = []
 
     if background_images_folder_path and os.path.isdir(background_images_folder_path):
-        image_extensions = ('*.png', '*.jpg', '*.jpeg', '*.tiff', '*.bmp')
+        # *** MUDANÇA AQUI: Incluindo '*.hdr' nas extensões de imagem ***
+        image_extensions = ('*.png', '*.jpg', '*.jpeg', '*.tiff', '*.bmp', '*.hdr')
+        # ***************************************************************
         for ext in image_extensions:
             all_background_images.extend(glob.glob(os.path.join(background_images_folder_path, ext)))
         
@@ -183,6 +188,9 @@ def generate_dataset_from_config(config: RenderingConfig) -> Dataset:
         for bg_idx, background_filepath in enumerate(backgrounds_to_render):
             if background_filepath:
                 print(f"Applying background: {os.path.basename(background_filepath)}")
+                # A função `scene.set_background_image` (presumivelmente definida em sdg_engine.core.interfaces.blender.scene)
+                # deve lidar com o carregamento da imagem e sua atribuição ao nó Environment Texture no mundo do Blender.
+                # O Blender automaticamente interpreta arquivos .hdr como imagens de ambiente.
                 scene.set_background_image(background_filepath)
                 # A resolução da cena será ajustada por set_background_image se a imagem for carregada com sucesso
             else:
