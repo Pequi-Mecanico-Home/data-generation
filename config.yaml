@@ -7,7 +7,7 @@ split: train # choose between 'train', 'validation', 'test'
 # Camera settings
 random_seed: 0
 resolution: [512, 512]
-samples: 100
+samples: 128
 
 # Scene settings
 scene_config:
