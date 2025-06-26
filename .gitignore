@@ -36,3 +36,4 @@ poetry.lock
 
 # Data
 dataset/
+dataset_360
