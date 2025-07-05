@@ -1,5 +1,4 @@
 # sdg-engine: a simple data generation engine for computer vision
-_If you are looking for the old version of `sdg-engine` I've stored it in [this branch](https://github.com/federicoarenasl/sdg-engine/tree/deprecated-main), the tutorial can be found [here](https://federicoarenasl.github.io/sdg-engine/)._
 
 A simple interface for synthetic data generation for computer vision using rendering engines.
 
@@ -33,25 +32,27 @@ In order for `sdg_engine` to remain minimal while illustrative for you to genera
 You can also use your own scenes by following the instructions below.
 ### From the example included
 This is composed of two files:
-- [`tyless-5-objects.blend`](sdg_engine/core/interfaces/blender/scenes/tyless-5-objects.blend): This is the actual Blender `.blend` scene.
+- [`gelatina.blend`](gelatina.blend): This is the actual Blender `.blend` scene.
 - [`example.config.yaml`](sdg_engine/example.config.yaml): This is the configuration for that indicates `sdg_engine` which `.blend` scene to use, where to save the data, and how to perform a sweep over the scene in order to generate meaningful data.
 
-Copy and paste `example.config.yaml` into your own `config.yaml`.
+Copy and paste `example.config.yaml` into your own `config.yaml` and put it in the root folder of this repository
 
 ### From your own example
 You'll have to follow some conventions I've setup to make the actual setup super easy.
 
 Open Blender (if you haven't installed it yet, you can do so [here](https://www.blender.org/download/)) and:
-1. Copy and paste the example [`tyless-5-objects.blend`](sdg_engine/core/interfaces/blender/scenes/tyless-5-objects.blend). Rename it to a name of your liking.
+1. Copy and paste the example [`gelatina.blend`](sdg_engine/core/interfaces/blender/scenes/tyless-5-objects.blend). Rename it to a name of your liking.
 2. In your new scene, make sure to name your objects with easily identifiable names.
 3. Spend as much time as you would like styling your scene to your liking.
 4. Keep the camera and axis as they are in the example scene, **do not delete nor move these**.
 
-Finally, update the configuration YAML `sdg_engine` will use to generate data:
+Update the configuration YAML `sdg_engine` will use to generate data:
 1. Copying and pasting the `example.config.yaml` into your own `config.yaml`, replace `scene_path` with the path to your new `.blend` file.
 2. Update the `scene_name` to the name of the scene in your `.blend` file.
 3. Update the `element_names` to the names of the objects in your scene.
 4. Update the `target_path` to the path where you want to save the data.
+
+Finally, put in the "background" folder the backgrounds that you want to generate the data with
 
 ### Generating the dataset
 Once you have your scene set up, you can generate data by running:
