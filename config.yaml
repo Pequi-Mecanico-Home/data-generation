@@ -1,13 +1,13 @@
 # General settings
 engine: blender
-target_path: datasets_test/dataset_256
+target_path: dataset/train
 debug: true # Whether to draw the bounding boxes on the images
 split: train # choose between 'train', 'validation', 'test'
 
 # Camera settings
 random_seed: 0
-resolution: [256, 256]
-samples: 60
+resolution: [30, 30]
+samples: 6
 
 # Scene settings
 scene_config:
@@ -26,7 +26,7 @@ scene_config:
 # Sweep settings
 sweep_config:
     name: example_sweep
-    step: 15
+    step: 60
     yaw_limits: [-90.0, 90.0]
     roll_limits: [-90.0, 90.0]
     camera_height_limits: [1.0, 1.0]
