@@ -1,0 +1,17 @@
+path: datasets_fanta # absolute path to dataset
+test: test/images # relative path to test images
+train: train/images # relative path to training images
+val: validation/images # relative path to validation images
+
+# classes
+names:
+  0: obj
+
+# Training parameters
+epochs: 200
+imgsz: 160
+freeze: 10
+batch: -1 
+save_period: 50
+project: models
+name: yolo11_200_epocas

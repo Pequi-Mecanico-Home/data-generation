@@ -1,20 +1,18 @@
 import bpy
 import math
-import os # Importa o módulo 'os' para operações de sistema de arquivos
-import glob # Importa o módulo 'glob' para encontrar arquivos que correspondem a um padrão
-import random # Adicionado para seleção aleatória, embora o loop seja sequencial agora
+import os
+import glob
+import random
 import warnings
 import numpy as np
 from tqdm import tqdm
-from typing import List, Tuple, Optional # Adicionado Optional para os novos parâmetros
+from typing import List, Tuple, Optional
 import uuid
 
-# Assumindo que essas importações do seu projeto 'sdg_engine' estão corretamente configuradas
-# e os módulos são acessíveis no ambiente em que o Blender está rodando o script.
 from sdg_engine.core.interfaces.blender.scene import BlenderScene
 from sdg_engine.core.interfaces.blender.sweep import BlenderSweep
 from sdg_engine.core.interfaces.blender.object import BlenderElement
-from sdg_engine.config import RenderingConfig # Certifique-se que RenderingConfig tem o campo background_images_folder_path
+from sdg_engine.config import RenderingConfig
 from sdg_engine.core.interfaces.blender import utils
 
 from sdg_engine.core.model import Dataset, Annotation, SnapshotAnnotation
@@ -22,8 +20,6 @@ from sdg_engine.core.model import Dataset, Annotation, SnapshotAnnotation
 METADATA_FILENAME = "metadata.jsonl"
 
 class BlenderRenderer:
-    """Interface for Blender rendering."""
-
     def __init__(
         self,
         scene: BlenderScene,
@@ -31,30 +27,12 @@ class BlenderRenderer:
         resolution: Tuple[int, int],
         samples: int,
     ):
-        """Initialize the interface with a Blender scene.
-
-        Parameters:
-        ___________
-        scene: BlenderScene
-            The Blender scene to render.
-        target_path: str
-            The path to save the rendered snapshots.
-        resolution: Tuple[int, int]
-            The resolution of the rendered snapshots.
-        samples: int
-            The number of samples to use for the rendered snapshots.
-        """
         self.scene = scene
         self.target_path = target_path
         self.resolution = resolution
-        # Set blender scene settings
         self.scene.blender_scene.render.resolution_x = resolution[0]
         self.scene.blender_scene.render.resolution_y = resolution[1]
         self.scene.blender_scene.cycles.samples = samples
-        # A resolução percentual e a transparência do filme são manipuladas em scene.py agora.
-        # self.scene.blender_scene.render.resolution_percentage = 100
-        # self.scene.blender_scene.render.film_transparent = False
-
 
     @classmethod
     def from_scene(
@@ -64,15 +42,13 @@ class BlenderRenderer:
         resolution: Tuple[int, int],
         samples: int,
     ):
-        """Create a BlenderRenderer object from an existing scene."""
         return cls(scene, target_path, resolution, samples)
 
     def render_snapshot(
         self,
-        snapshot_id: Optional[uuid.UUID] = None, # Torna opcional, para compatibilidade
-        custom_filepath: Optional[str] = None # Caminho de arquivo completo customizado
+        snapshot_id: Optional[uuid.UUID] = None,
+        custom_filepath: Optional[str] = None
     ) -> str:
-        """Render a snapshot of the scene and return the path to the snapshot."""
         if custom_filepath:
             self.scene.blender_scene.render.filepath = custom_filepath
         elif snapshot_id:
@@ -83,34 +59,33 @@ class BlenderRenderer:
         bpy.ops.render.render(write_still=True)
         return self.scene.blender_scene.render.filepath
 
-
     def annotate_snapshot(
         self,
         cameras: List[BlenderElement],
         elements: List[BlenderElement],
-        snapshot_id: uuid.UUID, # Mantém como UUID, representa o "snapshot" lógico base
+        snapshot_id: uuid.UUID,
         relative: bool = True,
-        file_name_override: Optional[str] = None # Nome do arquivo final da imagem
+        file_name_override: Optional[str] = None,
+        yolo_output_path: Optional[str] = None
     ) -> Annotation:
-        """Create bounding boxes for the elements in the scene."""
         if len(cameras) > 1:
             warnings.warn(
                 "Multiple cameras are not supported yet. Only the first camera will be used."
             )
         camera = cameras[0]
 
-        # Usa file_name_override se fornecido, senão usa o padrão baseado no snapshot_id
         annotation = Annotation(
             file_name=file_name_override if file_name_override else f"{snapshot_id}.png",
             objects=SnapshotAnnotation(bbox=[], categories=[]),
         )
 
-        # --- Obtém a resolução atual da cena do Blender para o cálculo da bounding box ---
         current_render_resolution = (
             self.scene.blender_scene.render.resolution_x,
             self.scene.blender_scene.render.resolution_y
         )
-        # --- FIM MUDANÇA ---
+        img_width, img_height = current_render_resolution
+
+        yolo_lines = []
 
         for i, element in enumerate(elements):
             bounding_box: np.ndarray = utils.create_bounding_box(
@@ -118,121 +93,113 @@ class BlenderRenderer:
                 camera=camera,
                 element=element,
                 relative=relative,
-                resolution=current_render_resolution, # Usa a resolução ATUAL da cena
+                resolution=current_render_resolution,
             )
             if bounding_box is None:
                 continue
 
+            x_min, y_min, x_max, y_max = bounding_box.tolist()
+
             annotation.objects.bbox.append(bounding_box.tolist())
             annotation.objects.categories.append(i)
 
+            center_x = (x_min + x_max) / 2
+            center_y = (y_min + y_max) / 2
+            width = x_max - x_min
+            height = y_max - y_min
+
+            normalized_center_x = center_x / img_width
+            normalized_center_y = center_y / img_height
+            normalized_width = width / img_width
+            normalized_height = height / img_height
+
+            yolo_line = f"{i} {normalized_center_x:.6f} {normalized_center_y:.6f} {normalized_width:.6f} {normalized_height:.6f}"
+            yolo_lines.append(yolo_line)
+
+        if yolo_output_path:
+            os.makedirs(os.path.dirname(yolo_output_path), exist_ok=True)
+            with open(yolo_output_path, "w") as f:
+                for line in yolo_lines:
+                    f.write(line + "\n")
+
         return annotation
 
-
 def generate_dataset_from_config(config: RenderingConfig) -> Dataset:
-    """Generate a dataset from a rendering configuration."""
-    # Initialize the scene and sweep
-    # A cena é carregada e os nós do mundo são configurados em BlenderScene.from_scene_config
     scene: BlenderScene = BlenderScene.from_scene_config(config.scene_config)
     sweep: BlenderSweep = BlenderSweep.from_sweep_config(config.sweep_config)
 
-    # Initialize the renderer
-    split_path = f"{config.target_path}/{config.split}"
+    split_images_path = os.path.join(config.target_path, config.split, "images")
+    split_labels_path = os.path.join(config.target_path, config.split, "labels")
+
+    os.makedirs(split_images_path, exist_ok=True)
+    os.makedirs(split_labels_path, exist_ok=True)
+
     renderer: BlenderRenderer = BlenderRenderer.from_scene(
         scene,
-        split_path,
+        split_images_path,
         config.resolution,
         config.samples,
     )
 
-    # Initialize the dataset
-    dataset: Dataset = Dataset(path=split_path, annotations=[])
+    dataset: Dataset = Dataset(path=config.target_path, annotations=[])
 
-    # --- INÍCIO: NOVAS MUDANÇAS PARA MÚLTIPLOS BACKGROUNDS ---
-
-    # 1. Obter o caminho da pasta de backgrounds da configuração
-    # Este assume que 'background_images_folder_path' foi adicionado a SceneConfig em config.py
     background_images_folder_path = getattr(config.scene_config, 'background_images_folder_path', None)
     all_background_images = []
 
     if background_images_folder_path and os.path.isdir(background_images_folder_path):
-        # *** MUDANÇA AQUI: Incluindo '*.hdr' nas extensões de imagem ***
         image_extensions = ('*.png', '*.jpg', '*.jpeg', '*.tiff', '*.bmp', '*.hdr')
-        # ***************************************************************
         for ext in image_extensions:
             all_background_images.extend(glob.glob(os.path.join(background_images_folder_path, ext)))
         
         if not all_background_images:
-            warnings.warn(f"Nenhuma imagem de background encontrada em: '{background_images_folder_path}'. As renderizações terão um fundo de cor sólida padrão.")
-    elif background_images_folder_path: # Se o caminho foi dado, mas não é um diretório
-        warnings.warn(f"O caminho fornecido para backgrounds não é um diretório válido: '{background_images_folder_path}'. As renderizações terão um fundo de cor sólida padrão.")
-    else: # Se nenhum caminho foi fornecido
-        warnings.warn("Nenhum caminho para pasta de backgrounds fornecido em config.scene_config.background_images_folder_path. As renderizações terão um fundo de cor sólida padrão.")
+            warnings.warn(f"No background images found in: '{background_images_folder_path}'. Renders will have a default solid color background.")
+    elif background_images_folder_path:
+        warnings.warn(f"The provided path for backgrounds is not a valid directory: '{background_images_folder_path}'. Renders will have a default solid color background.")
+    else:
+        warnings.warn("No background images folder path provided in config.scene_config.background_images_folder_path. Renders will have a default solid color background.")
     
-    # Se nenhuma imagem foi encontrada ou o caminho não é válido, a lista all_background_images estará vazia
-    # E isso ativará o fallback para cor sólida.
-
-    # --- FIM: NOVAS MUDANÇAS PARA MÚLTIPLOS BACKGROUNDS ---
-
-    # Collect the dataset annotations
-    # O loop principal agora será aninhado
     for snapshot_idx, snapshot in enumerate(tqdm(sweep.snapshots, desc="Rendering snapshots")):
-        # Prepare axis, camera and light para o snapshot atual
         scene.prepare_from_snapshot(snapshot=snapshot)
 
-        # --- NOVO LOOP PARA CADA BACKGROUND ---
-        # Determina quais backgrounds usar. Se houver backgrounds válidos, usa-os.
-        # Caso contrário, usa uma lista com um 'fundo padrão' para garantir que o loop interno execute pelo menos uma vez.
         backgrounds_to_render = all_background_images if all_background_images else [None]
 
         for bg_idx, background_filepath in enumerate(backgrounds_to_render):
             if background_filepath:
                 print(f"Applying background: {os.path.basename(background_filepath)}")
-                # A função `scene.set_background_image` (presumivelmente definida em sdg_engine.core.interfaces.blender.scene)
-                # deve lidar com o carregamento da imagem e sua atribuição ao nó Environment Texture no mundo do Blender.
-                # O Blender automaticamente interpreta arquivos .hdr como imagens de ambiente.
                 scene.set_background_image(background_filepath)
-                # A resolução da cena será ajustada por set_background_image se a imagem for carregada com sucesso
             else:
-                # Se background_filepath for None (no caso de fallback), usa cor sólida
                 scene.set_solid_background_color()
-                
-                # Quando usamos cor sólida, garantimos que a resolução é a definida na config
                 scene.blender_scene.render.resolution_x = renderer.resolution[0]
                 scene.blender_scene.render.resolution_y = renderer.resolution[1]
                 scene.blender_scene.render.resolution_percentage = 100
 
-            # --- RENDERIZAÇÃO E ANOTAÇÃO ---
-            # Crie um nome de arquivo único para a renderização atual (snapshot + background)
-            # Usamos snapshot.id.hex para uma representação compacta e válida no nome do arquivo.
             render_file_base_name = f"{snapshot.id.hex}_{bg_idx:04d}" 
-            full_output_filepath = f"{renderer.target_path}/{render_file_base_name}.png"
+            full_output_filepath_png = os.path.join(renderer.target_path, f"{render_file_base_name}.png")
+            full_output_filepath_txt = os.path.join(split_labels_path, f"{render_file_base_name}.txt")
             
-            renderer.render_snapshot(custom_filepath=full_output_filepath)
+            renderer.render_snapshot(custom_filepath=full_output_filepath_png)
             
             annotation: Annotation = renderer.annotate_snapshot(
                 cameras=scene.cameras,
                 elements=scene.elements,
-                snapshot_id=snapshot.id, # Passa o UUID original do snapshot base para a anotação
-                file_name_override=f"{render_file_base_name}.png" # Nome do arquivo que foi realmente renderizado
+                snapshot_id=snapshot.id,
+                file_name_override=f"{render_file_base_name}.png",
+                yolo_output_path=full_output_filepath_txt
             )
 
             if config.debug:
                 utils.draw_bounding_box_with_category(
-                    target_path=split_path,
+                    target_path=split_images_path, # Draw on the image path
                     annotation=annotation,
-                    snapshot=snapshot, # Snapshot original
+                    snapshot=snapshot,
                 )
 
             dataset.annotations.append(annotation)
-        # --- FIM NOVO LOOP PARA CADA BACKGROUND ---
 
-    # Render the annotation animation
     if config.debug:
-        utils.render_annotation_animation(split_path, dataset)
+        utils.render_annotation_animation(split_images_path, dataset) # Use image path for animation
 
-    # Save the dataset to the target path as a JSONL file
-    with open(f"{split_path}/{METADATA_FILENAME}", "w") as f:
+    with open(f"{config.target_path}/{METADATA_FILENAME}", "w") as f:
         for annotation in dataset.annotations:
             f.write(annotation.model_dump_json() + "\n")
 
