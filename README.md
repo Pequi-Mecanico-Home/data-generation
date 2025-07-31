@@ -101,7 +101,8 @@ below for the `example.config.yaml` configuration.
 To train the yolo with the dataset generated you need to:
 1. Put a test folder with images the same size as the images in the train folder
 2. Edit the config_yolo.yaml and train.py file with the yolo configs that you want
-3. Run the training with poetry run train.py
+3. Run the training with:
+            poetry run train.py
 
 ## Pushing your dataset to the 🤗 Hub
 
