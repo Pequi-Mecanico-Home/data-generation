@@ -13,7 +13,7 @@ from sdg_engine.core.interfaces.blender.scene import BlenderScene
 from sdg_engine.core.interfaces.blender.sweep import BlenderSweep
 from sdg_engine.core.interfaces.blender.object import BlenderElement
 from sdg_engine.config import RenderingConfig
-from sdg_engine.core.interfaces.blender import utils
+from sdg_engine.core.interfaces.blender import utils # Esta é a importação crucial
 
 from sdg_engine.core.model import Dataset, Annotation, SnapshotAnnotation
 
@@ -88,25 +88,26 @@ class BlenderRenderer:
         yolo_lines = []
 
         for i, element in enumerate(elements):
+            # A correção para coordenadas negativas deve ocorrer dentro de utils.create_bounding_box
             bounding_box: np.ndarray = utils.create_bounding_box(
                 scene=self.scene,
                 camera=camera,
                 element=element,
-                relative=relative,
+                relative=relative, # Passa 'relative' para a função de bounding box
                 resolution=current_render_resolution,
             )
+            
+
             if bounding_box is None:
                 continue
 
-            x_min, y_min, x_max, y_max = bounding_box.tolist()
+            top_x, top_y, width, height = bounding_box.tolist()
 
             annotation.objects.bbox.append(bounding_box.tolist())
             annotation.objects.categories.append(i)
 
-            center_x = (x_min + x_max) / 2
-            center_y = (y_min + y_max) / 2
-            width = x_max - x_min
-            height = y_max - y_min
+            center_x = top_x + (width / 2)
+            center_y = top_y + (height / 2)
 
             normalized_center_x = center_x / img_width
             normalized_center_y = center_y / img_height
@@ -189,7 +190,7 @@ def generate_dataset_from_config(config: RenderingConfig) -> Dataset:
 
             if config.debug:
                 utils.draw_bounding_box_with_category(
-                    target_path=split_images_path, # Draw on the image path
+                    target_path=split_images_path,
                     annotation=annotation,
                     snapshot=snapshot,
                 )
@@ -197,7 +198,7 @@ def generate_dataset_from_config(config: RenderingConfig) -> Dataset:
             dataset.annotations.append(annotation)
 
     if config.debug:
-        utils.render_annotation_animation(split_images_path, dataset) # Use image path for animation
+        utils.render_annotation_animation(split_images_path, dataset)
 
     with open(f"{config.target_path}/{METADATA_FILENAME}", "w") as f:
         for annotation in dataset.annotations:
